@@ -18,7 +18,7 @@ class GridConfig:
     martingale: float           # Martingale multiplier (1.0 = no increase)
     dynamic_step: float         # Dynamic step to increase grid span in %
     trading_deposit: float      # Trading deposit
-    first_order_price: float    # Price of first order
+    first_order_price: float    # Total first-order volume including leverage
     leverage: float             # Leverage multiplier
     direction: str              # "long", "short", or "both"
     commission_percent: float = 0.1  # Trading commission
@@ -69,9 +69,9 @@ class GridPosition:
         self.close_reason = ""
     
     def _calculate_position_size(self) -> float:
-        """Calculate position size based on deposit and leverage"""
-        position_value = self.config.trading_deposit * self.config.leverage
-        return position_value / self.entry_price
+        """Calculate position size from leveraged first-order volume."""
+        order_value = self.config.first_order_price
+        return order_value / self.entry_price
     
     def open_market_order(self, timestamp: datetime) -> Order:
         """Open market order"""
@@ -94,17 +94,19 @@ class GridPosition:
         """Create safety orders (grid of limit orders)"""
         self.safety_orders = []
         
+        previous_price = self.entry_price
+        
         for i in range(self.config.num_safety_orders):
-            # Calculate distance from market order
-            # Distance increases with dynamic_step
-            step_distance = self.config.safety_order_step + (i * self.config.dynamic_step)
+            # Calculate distance for this order
+            # Distance multiplied by dynamic_step for each subsequent order
+            step_distance = self.config.safety_order_step * (self.config.dynamic_step ** i)
             
             if self.side == OrderSide.BUY:
-                # For BUY: safety orders placed BELOW entry price
-                order_price = self.entry_price * (1 - step_distance / 100)
+                # For BUY: safety orders placed BELOW previous price
+                order_price = previous_price * (1 - step_distance / 100)
             else:  # SELL
-                # For SELL: safety orders placed ABOVE entry price
-                order_price = self.entry_price * (1 + step_distance / 100)
+                # For SELL: safety orders placed ABOVE previous price
+                order_price = previous_price * (1 + step_distance / 100)
             
             # Calculate quantity with martingale
             if self.config.martingale > 1.0:
@@ -124,6 +126,7 @@ class GridPosition:
             )
             
             self.safety_orders.append(order)
+            previous_price = order_price
         
         return self.safety_orders
     
@@ -167,14 +170,30 @@ class GridPosition:
         else:  # SELL
             return current_price <= tp_price
     
+    def _average_entry_price(self) -> float:
+        """Return the weighted average filled entry price for the position."""
+        if not self.market_order or self.market_order.status != OrderStatus.FILLED:
+            return self.entry_price
+
+        total_cost = self.market_order.filled_price * self.market_order.filled_quantity
+        total_qty = self.market_order.filled_quantity
+
+        for order in self.safety_orders:
+            if order.status == OrderStatus.FILLED:
+                total_cost += order.filled_price * order.filled_quantity
+                total_qty += order.filled_quantity
+
+        return total_cost / total_qty if total_qty > 0 else self.entry_price
+
     def _calculate_tp_price(self) -> float:
-        """Calculate take-profit price"""
+        """Calculate take-profit price based on average entry price."""
         tp_percent = self.config.take_profit_percent
+        avg_price = self._average_entry_price()
         
         if self.side == OrderSide.BUY:
-            return self.entry_price * (1 + tp_percent / 100)
+            return avg_price * (1 + tp_percent / 100)
         else:  # SELL
-            return self.entry_price * (1 - tp_percent / 100)
+            return avg_price * (1 - tp_percent / 100)
 
     def check_liquidation(self, high: float, low: float, current_price: float) -> tuple:
         """Check if the position should be liquidated under isolated margin simplified model.

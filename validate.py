@@ -118,7 +118,7 @@ try:
         martingale=1.5,
         dynamic_step=0.5,
         trading_deposit=1000.0,
-        first_order_price=2500.0,
+        first_order_price=10.0,
         leverage=1.0,
         direction='both'
     )

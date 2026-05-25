@@ -115,8 +115,8 @@ Min PnL:            -15.80
   // 10. Trading deposit ($)
   "trading_deposit": 1000.0,
   
-  // 11. First order price ($)
-  "first_order_price": 2500.0,
+  // 11. First order leveraged volume ($)
+  "first_order_price": 10.0,
   
   // 12. Leverage
   "leverage": 1.0,

@@ -298,7 +298,7 @@ python backtest_runner.py ../config/default_config.json ../data/YOUR_FILE.csv
   "martingale": "volume multiplier",
   "dynamic_step": "progressive increase",
   "trading_deposit": "capital $",
-  "first_order_price": "entry $",
+  "first_order_price": "first order leveraged volume $",
   "leverage": "position multiplier",
   "commission_percent": "fees %"
 }

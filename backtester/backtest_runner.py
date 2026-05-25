@@ -192,12 +192,15 @@ class BacktestRunner:
                 
                 if signal_side is not None and signal_side != last_signal:
                     # Open new position at S2 or R2
-                    print(f"[{timestamp}] OPEN {signal_side.value.upper()} at {close:.8f}")
-                    
                     active_position = self.grid_engine.open_position(
                         timestamp=timestamp,
                         entry_price=close,
                         signal_side=signal_side
+                    )
+                    spent_usdt = active_position.position_size * close
+                    print(
+                        f"[{timestamp}] OPEN {signal_side.value.upper()} at {close:.8f} "
+                        f"(USDT: {spent_usdt:.2f})"
                     )
                     
                     last_signal = signal_side
@@ -208,7 +211,11 @@ class BacktestRunner:
                 filled = active_position.check_safety_order_fills(timestamp, high, low, close)
                 if filled:
                     for order in filled:
-                        print(f"[{timestamp}] SAFETY ORDER FILLED: {order.order_id} at {order.price:.8f}")
+                        spent_usdt = order.price * order.quantity
+                        print(
+                            f"[{timestamp}] SAFETY ORDER FILLED: {order.order_id} "
+                            f"at {order.price:.8f} (USDT: {spent_usdt:.2f})"
+                        )
                 
                 # Check liquidation (isolated margin simplified)
                 liq, liq_price = active_position.check_liquidation(high, low, close)

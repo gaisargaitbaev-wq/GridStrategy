@@ -149,7 +149,7 @@ Edit `config/default_config.json`:
   
   // POSITION PARAMETERS
   "trading_deposit": 1000.0,          // 10. Trading capital ($)
-  "first_order_price": 2500.0,        // 11. Entry price ($)
+  "first_order_price": 10.0,           // 11. First order leveraged volume ($)
   "leverage": 1.0,                    // 12. Leverage multiplier
   
   "commission_percent": 0.1,          // Trading fees
