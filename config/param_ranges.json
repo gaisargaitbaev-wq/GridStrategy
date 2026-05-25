@@ -1,0 +1,7 @@
+{
+  "take_profit_percent": [1.1, 1.5, 1.9],
+  "num_safety_orders": [7, 9, 11],
+  "safety_order_step": [2.0, 2.5, 5.0],
+  "martingale": [1.2, 1.5],
+  "dynamic_step": [1.0, 1.2]
+}
