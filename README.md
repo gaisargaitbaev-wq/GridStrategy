@@ -51,26 +51,35 @@ pip install -r requirements.txt
 
 ### Step 1: Prepare Data
 
-Get OHLCV (Open, High, Low, Close, Volume) historical data in CSV format:
+Get OHLCV (Open, High, Low, Close, Volume) historical data in CSV format.
 
-**CSV Format:**
+CSV Format example:
 ```csv
 timestamp,open,high,low,close,volume
 2024-01-01 00:00:00,2500.50,2510.75,2498.25,2505.00,1000000
 2024-01-01 04:00:00,2505.00,2520.50,2502.00,2515.75,1200000
 ```
 
-Place your CSV file in the `data/` folder (e.g., `data/ETHUSDT_4h.csv`).
+Place your CSV file in the `data/` folder (e.g., `data/ETHUSDT_4h.csv`) or point `data_path` to its location.
+
+> If `data_path` is empty, `run_backtest.py` will derive the path from `cryptocurrency` and `timeframe` and will attempt to download missing data from Binance using `start_date` and `end_date`.
 
 ### Step 2: Configure Parameters
 
-Edit `config/default_config.json` with your trading parameters.
+Edit `config/default_config.json` with your trading parameters and set `data_path` to your CSV file, or provide the path on the command line.
 
 ### Step 3: Run Backtest
 
+Run the quick-start wrapper (reads `config/default_config.json`):
+
 ```bash
-cd backtester
-python backtest_runner.py ../config/default_config.json ../data/ETHUSDT_4h.csv
+python run_backtest.py
+```
+
+Or run the backtest runner directly and pass the data path:
+
+```bash
+python backtester/backtest_runner.py config/default_config.json data/ETHUSDT_4h.csv
 ```
 
 ## Configuration Parameters
@@ -120,3 +129,30 @@ Results are saved in the `results/` folder:
 ## Disclaimer
 
 This backtester is for **educational purposes only**. Past performance does not guarantee future results.
+
+## Downloading data from Binance
+
+`run_backtest.py` can automatically download missing CSV data if `data_path` is empty and the expected file does not exist. It derives the path as `data/{cryptocurrency}_{timeframe}.csv` and uses `start_date`/`end_date` from `config/default_config.json`.
+
+You can also fetch historical klines (OHLCV) from Binance and cache them locally using the included downloader.
+
+CLI (cached):
+
+```bash
+# download 4h candles for ETHUSDT from 2024-01-01 to 2024-01-10
+python download_binance.py --symbol ETHUSDT --interval 4h --start 2024-01-01 --end 2024-01-10
+```
+
+Programmatic usage (merge into cache):
+
+```python
+from backtester.binance_downloader import download_klines
+
+# writes to data/ETHUSDT_4h.csv (creates or merges missing ranges)
+download_klines('ETHUSDT', '4h', '2024-01-01', '2024-12-31')
+```
+
+Notes:
+- The downloader handles Binance's 1000-candle request limit by issuing multiple requests and stitching results together.
+- Files are cached under the `data/` directory (default: `data/{symbol}_{interval}.csv`). Subsequent runs will only fetch missing ranges.
+- Ensure `requests` is installed: `pip install -r requirements.txt`.

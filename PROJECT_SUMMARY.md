@@ -27,7 +27,7 @@ GridStrategy/
 │   ├── order_manager.py                  # Order & trade management
 │   ├── grid_engine.py                    # Grid trading logic
 │   ├── backtest_runner.py                # Main backtesting engine
-│   └── generate_sample_data.py           # Generate test data
+│   └── generate_sample_data.py           # Optional: Generate test data
 │
 ├── 📂 config/
 │   └── default_config.json               # Trading parameters
@@ -47,10 +47,10 @@ GridStrategy/
 pip install -r requirements.txt
 ```
 
-### 2. Generate Test Data
+### 2. Optional: Generate Test Data
 ```bash
 cd backtester
-python generate_sample_data.py
+python generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output ../data/ETHUSDT_4h.csv
 cd ..
 ```
 
@@ -253,10 +253,10 @@ timestamp,open,high,low,close,volume,meanline,r1,s1,r2,s2,condition
 
 ## 🔧 How to Use Your Data
 
-### Option 1: Generate Sample Data
+### Option 1: Optional - Generate Sample Data (for testing)
 ```bash
 cd backtester
-python generate_sample_data.py
+python generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output ../data/ETHUSDT_4h.csv
 ```
 
 ### Option 2: Use Your Own CSV

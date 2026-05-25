@@ -8,17 +8,21 @@ cd GridStrategy
 pip install -r requirements.txt
 ```
 
-### 2. Generate Sample Data
+### 2. Optional: Generate Sample Data (for testing)
+This step is optional. If you want synthetic data for quick testing, run the standalone generator:
 ```bash
 cd backtester
-python generate_sample_data.py
+python generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output ../data/ETHUSDT_4h.csv
+# Creates: ../data/ETHUSDT_4h.csv
 ```
+
+If `config/default_config.json` has `data_path` empty, `run_backtest.py` will derive the expected CSV path from `cryptocurrency` and `timeframe` and will automatically download missing data from Binance using `start_date` and `end_date`.
 
 ### 3. Run Backtest
 ```bash
 python -c "from backtest_runner import BacktestRunner; \
 b = BacktestRunner('../config/default_config.json'); \
-b.load_data('../data/sample_data.csv'); \
+  b.load_data('../data/your_data.csv'); \
 results = b.run_backtest(); \
 b.print_summary()"
 ```
@@ -63,11 +67,11 @@ timestamp,open,high,low,close,volume
 
 **Options for getting data:**
 
-#### A. Generate Sample Data (for testing)
+#### A. Optional: Generate Sample Data (for testing)
 ```bash
 cd backtester
-python generate_sample_data.py
-# Creates: ../data/sample_data.csv
+python generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output ../data/ETHUSDT_4h.csv
+# Creates: ../data/ETHUSDT_4h.csv
 ```
 
 #### B. Download Real Data
@@ -119,6 +123,8 @@ python run_backtest.py
 cd backtester
 python backtest_runner.py ../config/default_config.json ../data/your_data.csv
 ```
+
+If the CSV is missing and you want `run_backtest.py` to download it automatically, leave `data_path` empty in `config/default_config.json` and set `cryptocurrency`, `timeframe`, `start_date`, and `end_date` there.
 
 #### Option C: Python Script
 ```python

@@ -1,108 +1,102 @@
 """
-Sample Data Generator for Testing
-Generates synthetic OHLCV data for backtesting
+Optional sample data generator (standalone utility).
+This script is provided as a convenience to create synthetic OHLCV CSVs for quick testing.
+
+It is not used by the main quick-start flow (the backtester requires a real data CSV supplied via
+`config/default_config.json:data_path` or as the second CLI argument).
+
+Usage:
+    python backtester/generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output data/ETHUSDT_4h.csv
+
 """
-import pandas as pd
-import numpy as np
+from __future__ import annotations
+from typing import Optional
+import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
+import numpy as np
+import pandas as pd
 
 
 def generate_sample_data(
     symbol: str = "ETHUSDT",
     start_price: float = 2500.0,
-    days: int = 365,
     timeframe_minutes: int = 240,
+    start_date: str = "2024-01-01",
+    end_date: Optional[str] = None,
     volatility: float = 0.02,
     trend: float = 0.0001,
-    output_path: str = "../data/sample_data.csv"
+    output_path: str = "data/sample_data.csv",
 ) -> pd.DataFrame:
-    """
-    Generate synthetic OHLCV data
-    
-    Args:
-        symbol: Trading pair
-        start_price: Initial price
-        days: Number of days of data
-        timeframe_minutes: Candle timeframe in minutes
-        volatility: Daily volatility (as decimal, e.g., 0.02 = 2%)
-        trend: Daily trend (as decimal, e.g., 0.0001 = 0.01%)
-        output_path: Output file path
-        
-    Returns:
-        DataFrame with OHLCV data
-    """
-    
-    # Calculate number of candles
-    total_minutes = days * 24 * 60
-    num_candles = int(total_minutes / timeframe_minutes)
-    
-    # Generate timestamps
-    start_time = datetime(2024, 1, 1)
+    start_time = datetime.fromisoformat(start_date)
+    if end_date:
+        end_time = datetime.fromisoformat(end_date)
+        total_minutes = int((end_time - start_time).total_seconds())
+        num_candles = int(total_minutes / timeframe_minutes) + 1
+    else:
+        # default to one year
+        total_minutes = 365 * 24 * 60
+        num_candles = int(total_minutes / timeframe_minutes)
+
     timestamps = [start_time + timedelta(minutes=timeframe_minutes * i) for i in range(num_candles)]
-    
-    # Generate price data using random walk with drift
+
     prices = np.zeros(num_candles)
     prices[0] = start_price
-    
-    np.random.seed(42)  # For reproducibility
-    
+    rng = np.random.default_rng(42)
+
     for i in range(1, num_candles):
-        # Random walk with drift (trend)
-        random_change = np.random.normal(trend, volatility)
-        prices[i] = prices[i-1] * (1 + random_change)
-        
-        # Ensure positive prices
-        prices[i] = max(prices[i], 0.01)
-    
-    # Generate OHLC from close prices
-    data = []
+        random_change = rng.normal(trend, volatility)
+        prices[i] = max(prices[i-1] * (1 + random_change), 0.01)
+
+    rows = []
     for i in range(num_candles):
         close = prices[i]
-        
-        # Generate intracandle noise
-        open_price = close * np.random.uniform(0.998, 1.002)
-        high = max(open_price, close) * np.random.uniform(1.000, 1.005)
-        low = min(open_price, close) * np.random.uniform(0.995, 1.000)
-        
-        # Generate volume
-        volume = np.random.uniform(500000, 2000000)
-        
-        data.append({
-            'timestamp': timestamps[i],
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': int(volume)
+        open_p = close * rng.uniform(0.998, 1.002)
+        high = max(open_p, close) * rng.uniform(1.0, 1.004)
+        low = min(open_p, close) * rng.uniform(0.996, 1.0)
+        volume = int(rng.uniform(100000, 2000000))
+        rows.append({
+            "timestamp": timestamps[i].isoformat(sep=' '),
+            "open": round(open_p, 6),
+            "high": round(high, 6),
+            "low": round(low, 6),
+            "close": round(close, 6),
+            "volume": volume,
         })
-    
-    df = pd.DataFrame(data)
-    
-    # Save to CSV
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_file, index=False)
-    
-    print(f"\n✓ Generated {num_candles} candles of {symbol}")
-    print(f"  Timeframe: {timeframe_minutes} minutes")
-    print(f"  Date range: {timestamps[0]} to {timestamps[-1]}")
-    print(f"  Price range: ${prices.min():.2f} - ${prices.max():.2f}")
-    print(f"  Saved to: {output_file}")
-    
+
+    df = pd.DataFrame(rows)
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False)
+    print(f"Generated {len(df)} candles for {symbol} -> {out}")
     return df
 
 
 if __name__ == "__main__":
-    # Generate sample data
-    df = generate_sample_data(
-        symbol="ETHUSDT",
-        start_price=2500.0,
-        days=365,
-        timeframe_minutes=240,  # 4-hour candles
-        volatility=0.02,
-        trend=0.0001
+    p = argparse.ArgumentParser()
+    p.add_argument("--symbol", default="ETHUSDT")
+    p.add_argument("--start_price", type=float, default=2500.0)
+    p.add_argument("--timeframe", default="4h", help="e.g. 4h, 1h, 15m")
+    p.add_argument("--start", dest="start_date", default="2024-01-01")
+    p.add_argument("--end", dest="end_date", default=None)
+    p.add_argument("--output", default="data/sample_data.csv")
+    args = p.parse_args()
+
+    tf = args.timeframe.strip().lower()
+    if tf.endswith('h'):
+        minutes = int(tf[:-1]) * 60
+    elif tf.endswith('m'):
+        minutes = int(tf[:-1])
+    elif tf.endswith('d'):
+        minutes = int(tf[:-1]) * 24 * 60
+    else:
+        raise SystemExit('Unsupported timeframe')
+
+    generate_sample_data(
+        symbol=args.symbol,
+        start_price=args.start_price,
+        timeframe_minutes=minutes,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        output_path=args.output,
     )
-    
-    print("\nSample data generated successfully!")
-    print(df.head(10))

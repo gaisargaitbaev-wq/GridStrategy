@@ -22,6 +22,7 @@ class GridConfig:
     leverage: float             # Leverage multiplier
     direction: str              # "long", "short", or "both"
     commission_percent: float = 0.1  # Trading commission
+    maintenance_margin_percent: float = 0.005  # Maintenance margin for isolated margin (fraction)
 
 
 class GridPosition:
@@ -174,6 +175,34 @@ class GridPosition:
             return self.entry_price * (1 + tp_percent / 100)
         else:  # SELL
             return self.entry_price * (1 - tp_percent / 100)
+
+    def check_liquidation(self, high: float, low: float, current_price: float) -> tuple:
+        """Check if the position should be liquidated under isolated margin simplified model.
+
+        Returns (liquidated: bool, liquidation_price: float).
+        Simplified formula:
+          liq_price_long  = entry_price * (1 - (1 - maintenance_margin)/leverage)
+          liq_price_short = entry_price * (1 + (1 - maintenance_margin)/leverage)
+        Liquidation triggers when price touches that level (low <= liq for long, high >= liq for short).
+        """
+        if not self.market_order or self.market_order.status != OrderStatus.FILLED:
+            return False, 0.0
+
+        entry = self.entry_price_filled if self.entry_price_filled else self.entry_price
+        mm = getattr(self.config, 'maintenance_margin_percent', 0.005)
+        L = self.config.leverage if self.config.leverage != 0 else 1.0
+
+        offset = (1.0 - mm) / L
+        if self.side == OrderSide.BUY:
+            liq_price = entry * (1.0 - offset)
+            if low <= liq_price:
+                return True, liq_price
+        else:
+            liq_price = entry * (1.0 + offset)
+            if high >= liq_price:
+                return True, liq_price
+
+        return False, liq_price
     
     def close_position(
         self,
@@ -253,7 +282,8 @@ class GridPosition:
                 side=self.market_order.side,
                 pnl=total_pnl,
                 pnl_percent=pnl_percent,
-                is_tp_close=(reason == "take_profit")
+                is_tp_close=(reason == "take_profit"),
+                close_reason=reason
             )
             self.order_manager.trades.append(trade)
         

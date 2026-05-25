@@ -65,6 +65,7 @@ class Trade:
     pnl: float
     pnl_percent: float
     is_tp_close: bool  # True if closed by take-profit
+    close_reason: str = ""  # Reason for closing the position
     
     def duration(self) -> int:
         """Duration in minutes"""
@@ -145,7 +146,8 @@ class OrderManager:
         trade_id: str,
         entry_order: Order,
         exit_order: Order,
-        is_tp_close: bool = False
+        is_tp_close: bool = False,
+        close_reason: str = ""
     ) -> Trade:
         """Create a completed trade"""
         quantity = entry_order.filled_quantity
@@ -175,7 +177,8 @@ class OrderManager:
             side=entry_order.side,
             pnl=pnl,
             pnl_percent=pnl_percent,
-            is_tp_close=is_tp_close
+            is_tp_close=is_tp_close,
+            close_reason=close_reason
         )
         
         self.trades.append(trade)

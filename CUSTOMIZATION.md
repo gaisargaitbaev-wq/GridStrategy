@@ -336,7 +336,8 @@ from your_indicator import YourIndicator
 
 def test_indicator():
     backtester = BacktestRunner("config/default_config.json")
-    backtester.load_data("data/sample_data.csv")
+    # Load your real data file (set data_path in config or pass explicit path)
+    backtester.load_data("data/your_data.csv")
     
     # Replace indicator
     backtester.indicator = YourIndicator()

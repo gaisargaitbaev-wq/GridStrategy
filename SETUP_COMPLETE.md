@@ -16,7 +16,7 @@ backtester/
 ├── order_manager.py            # Order & trade management system
 ├── grid_engine.py              # Grid trading logic with safety orders
 ├── backtest_runner.py          # Main backtesting engine
-└── generate_sample_data.py     # Generate synthetic test data
+└── generate_sample_data.py     # Optional: generate synthetic test data
 ```
 
 ### Configuration & Data
@@ -72,7 +72,7 @@ GRID STRATEGY BACKTESTER - VALIDATION
   ✓ order_manager.py
   ✓ grid_engine.py
   ✓ backtest_runner.py
-  ✓ generate_sample_data.py
+  (optional) generate_sample_data.py
 
 [2/5] Checking configuration file...
   ✓ Configuration loaded
@@ -89,16 +89,12 @@ GRID STRATEGY BACKTESTER - VALIDATION
 ✓ ALL VALIDATION TESTS PASSED!
 ```
 
-### Step 3: Run Sample Backtest
+### Step 3: Run Backtest (using your data)
 ```bash
 python run_backtest.py
 ```
 
-This will:
-1. Generate sample OHLCV data (365 days, 4-hour candles)
-2. Run the backtest with default parameters
-3. Display summary statistics
-4. Save results to `results/` folder
+This will run the backtest using the CSV specified in `config/default_config.json:data_path` or the path passed as the second CLI argument.
 
 ---
 
@@ -315,7 +311,7 @@ CSV must have: `timestamp,open,high,low,close,volume`
 | `pip install -r requirements.txt` | Install dependencies |
 | `python validate.py` | Verify installation |
 | `python run_backtest.py` | Quick-start backtest |
-| `cd backtester && python generate_sample_data.py` | Generate test data |
+| `cd backtester && python generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output ../data/ETHUSDT_4h.csv` | Optional: generate test data |
 | `python backtester/backtest_runner.py config/default_config.json data/YOUR_FILE.csv` | Run with custom data |
 
 ---

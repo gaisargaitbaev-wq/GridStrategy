@@ -51,8 +51,8 @@ GridStrategy/
 │   │   ├── _simulate_trading()            ├─ Candle-by-candle logic
 │   │   └── generate_results()             └─ Create report
 │   │
-│   └── generate_sample_data.py            ← Test Data Generator
-│       └── generate_sample_data()         └─ Create synthetic OHLCV
+│   └── generate_sample_data.py            ← Optional Test Data Generator
+│       └── generate_sample_data()         └─ Create synthetic OHLCV (optional)
 │
 ├── 📂 config/                             ← Configuration Files
 │   └── default_config.json                ← Your 12 trading parameters
@@ -106,10 +106,10 @@ GridStrategy/
 
 | File | Command | Purpose |
 |------|---------|---------|
-| **run_backtest.py** | `python run_backtest.py` | Quick-start (generates data + runs backtest) |
+| **run_backtest.py** | `python run_backtest.py` | Quick-start (runs backtest using config/data_path) |
 | **validate.py** | `python validate.py` | Verify all modules work |
 | **backtest_runner.py** | `python backtest_runner.py config.json data.csv` | Manual backtest run |
-| **generate_sample_data.py** | `python generate_sample_data.py` | Generate test data |
+| **generate_sample_data.py** | `python backtester/generate_sample_data.py` | Optional: generate test data |
 
 ### ⚙️ Core Classes
 
@@ -270,10 +270,10 @@ python run_backtest.py
 python validate.py
 ```
 
-### Generate Test Data
+### Generate Test Data (optional)
 ```bash
 cd backtester
-python generate_sample_data.py
+python generate_sample_data.py --symbol ETHUSDT --timeframe 4h --start 2024-01-01 --end 2024-12-31 --output ../data/ETHUSDT_4h.csv
 ```
 
 ### Run with Custom Data

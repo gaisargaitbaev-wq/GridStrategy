@@ -37,7 +37,8 @@ class BacktestRunner:
             first_order_price=config_dict['first_order_price'],
             leverage=config_dict.get('leverage', 1.0),
             direction=config_dict.get('direction', 'long'),
-            commission_percent=config_dict.get('commission_percent', 0.1)
+            commission_percent=config_dict.get('commission_percent', 0.1),
+            maintenance_margin_percent=config_dict.get('maintenance_margin_percent', 0.005)
         )
         
         # Indicator config
@@ -71,13 +72,25 @@ class BacktestRunner:
             DataFrame with OHLCV data
         """
         self.df = pd.read_csv(csv_path)
-        
-        # Convert timestamp to datetime
+
+        # Convert timestamp to datetime (accept common column names)
         if 'timestamp' in self.df.columns:
             self.df['timestamp'] = pd.to_datetime(self.df['timestamp'])
         elif 'Date' in self.df.columns:
             self.df['timestamp'] = pd.to_datetime(self.df['Date'])
             self.df = self.df.drop('Date', axis=1)
+
+        # Apply optional start/end date filtering from config
+        start_date = self.config_dict.get('start_date')
+        end_date = self.config_dict.get('end_date')
+        if start_date or end_date:
+            if start_date:
+                start_dt = pd.to_datetime(start_date)
+                self.df = self.df[self.df['timestamp'] >= start_dt]
+            if end_date:
+                end_dt = pd.to_datetime(end_date)
+                self.df = self.df[self.df['timestamp'] <= end_dt]
+            self.df = self.df.reset_index(drop=True)
         
         # Ensure required columns exist
         required_cols = ['open', 'high', 'low', 'close', 'volume']
@@ -143,7 +156,7 @@ class BacktestRunner:
         self.df['s2'] = loband2
         self.df['condition'] = condition
         
-        print("✓ Indicator calculated")
+        print("Indicator calculated")
         
         # Run simulation
         print("Running simulation...")
@@ -197,6 +210,20 @@ class BacktestRunner:
                     for order in filled:
                         print(f"[{timestamp}] SAFETY ORDER FILLED: {order.order_id} at {order.price:.8f}")
                 
+                # Check liquidation (isolated margin simplified)
+                liq, liq_price = active_position.check_liquidation(high, low, close)
+                if liq:
+                    print(f"[{timestamp}] LIQUIDATION at {liq_price:.8f}")
+                    pnl, pnl_percent = active_position.close_position(
+                        timestamp=timestamp,
+                        close_price=liq_price,
+                        reason="liquidation"
+                    )
+                    print(f"  PnL: {pnl:.8f} ({pnl_percent:.2f}%)")
+                    active_position = None
+                    last_signal = None
+                    continue
+
                 # Check take-profit
                 if active_position.check_take_profit(close):
                     print(f"[{timestamp}] TAKE-PROFIT HIT at {close:.8f}")
@@ -207,10 +234,24 @@ class BacktestRunner:
                         reason="take_profit"
                     )
                     
-                    print(f"  → PnL: {pnl:.8f} ({pnl_percent:.2f}%)")
+                    print(f"  PnL: {pnl:.8f} ({pnl_percent:.2f}%)")
                     
                     active_position = None
                     last_signal = None
+
+        if active_position is not None:
+            final_row = self.df.iloc[-1]
+            final_timestamp = final_row['timestamp']
+            final_close = final_row['close']
+            print(f"[{final_timestamp}] END-OF-DATA CLOSE at {final_close:.8f}")
+            pnl, pnl_percent = active_position.close_position(
+                timestamp=final_timestamp,
+                close_price=final_close,
+                reason="end_of_data"
+            )
+            print(f"  PnL: {pnl:.8f} ({pnl_percent:.2f}%)")
+            active_position = None
+            last_signal = None
     
     def _get_entry_signal(self, condition: int) -> Optional[OrderSide]:
         """
@@ -252,7 +293,8 @@ class BacktestRunner:
                     'side': t.side.value,
                     'pnl': t.pnl,
                     'pnl_percent': t.pnl_percent,
-                    'is_tp_close': t.is_tp_close
+                    'is_tp_close': t.is_tp_close,
+                    'close_reason': t.close_reason
                 }
                 for t in self.grid_engine.order_manager.trades
             ]
@@ -302,6 +344,86 @@ class BacktestRunner:
         print(f"Max PnL:            {stats['max_pnl']:.8f}")
         print(f"Min PnL:            {stats['min_pnl']:.8f}")
         print("="*60)
+
+    def plot_results(self, output_path: str = "results/backtest_chart.png", show: bool = False) -> None:
+        """Plot the backtest price chart with MRC lines and order events."""
+        if self.df is None:
+            raise ValueError("No data loaded. Call load_data() first.")
+
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+        except ImportError as exc:
+            raise ImportError(
+                "matplotlib is required to plot results. Install it with `pip install matplotlib`."
+            ) from exc
+
+        df = self.df.copy()
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+        fig, ax = plt.subplots(figsize=(16, 9))
+        ax.plot(df['timestamp'], df['close'], label='Close', color='black', linewidth=1.2)
+        ax.plot(df['timestamp'], df['meanline'], label='Mean Line', color='#1f77b4', linewidth=1.2)
+        ax.plot(df['timestamp'], df['r1'], label='R1', color='#2ca02c', linestyle='--', linewidth=1)
+        ax.plot(df['timestamp'], df['s1'], label='S1', color='#2ca02c', linestyle='--', linewidth=1)
+        ax.plot(df['timestamp'], df['r2'], label='R2', color='#d62728', linestyle='-.', linewidth=1)
+        ax.plot(df['timestamp'], df['s2'], label='S2', color='#d62728', linestyle='-.', linewidth=1)
+
+        entry_scatter = []
+        exit_scatter = []
+        safety_scatter = []
+
+        for trade in self.grid_engine.order_manager.trades:
+            entry_scatter.append((trade.entry_time, trade.entry_price, trade.side))
+            exit_scatter.append((trade.exit_time, trade.exit_price, trade.side, trade.is_tp_close))
+
+        for order in self.grid_engine.order_manager.orders:
+            if order.order_type.name == 'LIMIT' and order.status.name == 'FILLED':
+                safety_scatter.append((order.timestamp, order.price, order.side))
+
+        entry_plotted = False
+        for timestamp, price, side in entry_scatter:
+            marker = '^' if side == OrderSide.BUY else 'v'
+            color = 'green' if side == OrderSide.BUY else 'red'
+            label = 'Entry Order' if not entry_plotted else None
+            ax.scatter(timestamp, price, marker=marker, color=color, s=120, edgecolors='black', zorder=5, label=label)
+            entry_plotted = True
+
+        exit_plotted = False
+        for timestamp, price, side, is_tp_close in exit_scatter:
+            marker = 'X' if is_tp_close else 'o'
+            color = 'blue' if side == OrderSide.BUY else 'orange'
+            label = 'Exit Order' if not exit_plotted else None
+            ax.scatter(timestamp, price, marker=marker, color=color, s=140, edgecolors='black', zorder=6, label=label)
+            exit_plotted = True
+
+        safety_plotted = False
+        for timestamp, price, side in safety_scatter:
+            marker = 's'
+            color = '#8c564b'
+            label = 'Safety Fill' if not safety_plotted else None
+            ax.scatter(timestamp, price, marker=marker, color=color, s=80, alpha=0.75, edgecolors='black', zorder=4, label=label)
+            safety_plotted = True
+
+        ax.set_title('Backtest Price Chart with MRC Bands and Order Events')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Price')
+        ax.legend(loc='best', fontsize='small')
+        ax.grid(True, linestyle=':', alpha=0.6)
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        fig.autofmt_xdate()
+
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_file, dpi=150, bbox_inches='tight')
+
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
+
+        print(f"\nChart saved to: {output_path}")
 
 
 if __name__ == "__main__":

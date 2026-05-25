@@ -27,9 +27,6 @@ try:
     from backtester.backtest_runner import BacktestRunner
     print("  ✓ backtest_runner.py")
     
-    from backtester.generate_sample_data import generate_sample_data
-    print("  ✓ generate_sample_data.py")
-    
 except Exception as e:
     print(f"  ✗ Import failed: {e}")
     sys.exit(1)
@@ -153,7 +150,8 @@ print("\n" + "="*60)
 print("✓ ALL VALIDATION TESTS PASSED!")
 print("="*60)
 print("\nReady to run backtest. Quick start:")
-print("  1. python backtester/generate_sample_data.py")
-print("  2. python run_backtest.py")
-print("\nOr manually:")
-print("  python backtester/backtest_runner.py config/default_config.json data/sample_data.csv")
+print("  - Prepare a real OHLCV CSV file and set 'data_path' in config/default_config.json or pass it as the second CLI argument.")
+print("  - Example using config only:")
+print("      python run_backtest.py")
+print("  - Example passing data path on CLI:")
+print("      python run_backtest.py config/default_config.json data/ETHUSDT_4h.csv")
