@@ -185,6 +185,10 @@ class GridPosition:
 
         return total_cost / total_qty if total_qty > 0 else self.entry_price
 
+    def get_average_entry_price(self) -> float:
+        """Public accessor for the weighted average entry price."""
+        return self._average_entry_price()
+
     def _calculate_tp_price(self) -> float:
         """Calculate take-profit price based on average entry price."""
         tp_percent = self.config.take_profit_percent

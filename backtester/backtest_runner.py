@@ -212,9 +212,12 @@ class BacktestRunner:
                 if filled:
                     for order in filled:
                         spent_usdt = order.price * order.quantity
+                        avg_entry = active_position.get_average_entry_price()
+                        back_to_entry = abs((avg_entry - order.price) / avg_entry) * 100 if avg_entry != 0 else 0.0
                         print(
                             f"[{timestamp}] SAFETY ORDER FILLED: {order.order_id} "
-                            f"at {order.price:.8f} (USDT: {spent_usdt:.2f})"
+                            f"at {order.price:.8f} (USDT: {spent_usdt:.2f}) "
+                            f"back to entry: {back_to_entry:.2f}%"
                         )
                 
                 # Check liquidation (isolated margin simplified)
