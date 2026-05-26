@@ -86,6 +86,27 @@ def run_combo(backtester: BacktestRunner, data_path: str) -> dict:
     liquidation_count = sum(1 for trade in trades if trade.get("close_reason") == "liquidation")
     trading_deposit = backtester.config_dict.get("trading_deposit", 0.0)
     final_deposit = trading_deposit + stats.get("total_pnl", 0.0)
+    # Compute bot_weight: maximum USDT exposure for a single position if all safety orders filled
+    bot_weights = []
+    positions = getattr(backtester.grid_engine, "positions", [])
+    for pos in positions:
+        total_usdt = 0.0
+        # market order theoretical value
+        try:
+            total_usdt += float(pos.position_size) * float(pos.entry_price)
+        except Exception:
+            pass
+
+        # add all safety orders potential
+        for order in getattr(pos, "safety_orders", []):
+            try:
+                total_usdt += float(order.quantity) * float(order.price)
+            except Exception:
+                pass
+
+        bot_weights.append(total_usdt)
+
+    bot_weight = max(bot_weights) if bot_weights else 0.0
 
     return {
         "total_trades": stats.get("total_trades", 0),
@@ -97,6 +118,7 @@ def run_combo(backtester: BacktestRunner, data_path: str) -> dict:
         "avg_pnl_percent": stats.get("avg_pnl_percent", 0.0),
         "liquidations": liquidation_count,
         "final_deposit": final_deposit,
+        "bot_weight": bot_weight,
     }
 
 
@@ -107,7 +129,11 @@ def write_results_csv(output_path: str, rows: list[dict], fieldnames: list[str])
     with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=";")
         writer.writeheader()
-        writer.writerows(rows)
+        for row in rows:
+            output_row = {k: v for k, v in row.items() if k != "leverage"}
+            if "leverage" in row:
+                output_row["Leverage"] = row["leverage"]
+            writer.writerow(output_row)
 
 
 def main():
@@ -125,24 +151,32 @@ def main():
     data_path = resolve_data_path(base_config, data_path_arg)
 
     rows = []
-    fieldnames = [*sorted(param_ranges.keys()),
-                  "total_trades",
-                  "winning_trades",
-                  "losing_trades",
-                  "win_rate",
-                  "total_pnl",
-                  "avg_pnl",
-                  "avg_pnl_percent",
-                  "liquidations",
-                  "final_deposit"]
+    fieldnames = [
+        *["Leverage" if key == "leverage" else key for key in sorted(param_ranges.keys())],
+        "TOP",
+        "total_trades",
+        "winning_trades",
+        "losing_trades",
+        "win_rate",
+        "total_pnl",
+        "avg_pnl",
+        "avg_pnl_percent",
+        "liquidations",
+        "final_deposit",
+        "bot_weight"
+    ]
 
     print(f"Running grid search: {len(combos)} combinations")
     for idx, combo in enumerate(combos, start=1):
         print(f"[{idx}/{len(combos)}] {combo}")
         backtester = prepare_backtester(base_config_path, combo)
         result = run_combo(backtester, data_path)
-        row = {**combo, **result}
+        row = {**combo, **result, "TOP": False}
         rows.append(row)
+
+    top_count = min(10, len(rows))
+    for row in sorted(rows, key=lambda r: r["total_pnl"], reverse=True)[:top_count]:
+        row["TOP"] = True
 
     write_results_csv(output_path, rows, fieldnames)
     print(f"\nGrid search completed. Results written to: {output_path}")
