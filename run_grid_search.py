@@ -108,6 +108,11 @@ def run_combo(backtester: BacktestRunner, data_path: str) -> dict:
 
     bot_weight = max(bot_weights) if bot_weights else 0.0
 
+    # calculate required margin given leverage (avoid division by zero)
+    leverage_val = float(backtester.config_dict.get("leverage", 1.0) or 1.0)
+    required_margin = bot_weight / leverage_val if leverage_val != 0 else bot_weight
+    insufficient_margin = required_margin > trading_deposit
+
     return {
         "total_trades": stats.get("total_trades", 0),
         "winning_trades": stats.get("winning_trades", 0),
@@ -119,6 +124,8 @@ def run_combo(backtester: BacktestRunner, data_path: str) -> dict:
         "liquidations": liquidation_count,
         "final_deposit": final_deposit,
         "bot_weight": bot_weight,
+        "required_margin": required_margin,
+        "insufficient_margin": insufficient_margin,
     }
 
 
@@ -163,7 +170,9 @@ def main():
         "avg_pnl_percent",
         "liquidations",
         "final_deposit",
-        "bot_weight"
+        "bot_weight",
+        "required_margin",
+        "insufficient_margin"
     ]
 
     print(f"Running grid search: {len(combos)} combinations")
@@ -174,8 +183,10 @@ def main():
         row = {**combo, **result, "TOP": False}
         rows.append(row)
 
-    top_count = min(10, len(rows))
-    for row in sorted(rows, key=lambda r: r["total_pnl"], reverse=True)[:top_count]:
+    # Determine TOP combos excluding those with insufficient margin
+    eligible_rows = [r for r in rows if not r.get("insufficient_margin")]
+    top_count = min(10, len(eligible_rows))
+    for row in sorted(eligible_rows, key=lambda r: r["total_pnl"], reverse=True)[:top_count]:
         row["TOP"] = True
 
     write_results_csv(output_path, rows, fieldnames)
